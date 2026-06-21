@@ -1,51 +1,116 @@
-# robo-aim
+# robo-auto-aim
 
-Real-time armor detection and target tracking for competitive robotics (RoboMaster). Takes a raw camera feed, finds enemy armor plates, classifies which robot it is, and outputs a tracked 3D position with velocity prediction — fast enough to feed a ballistic solver and actually hit moving targets.
+Real-time auto-aiming system for RoboMaster competitive robotics. Takes a raw camera feed and outputs a tracked 3D target position with velocity prediction — fast enough to feed a ballistic solver and actually hit moving targets.
 
-## what it does
+Built in C++14 on ROS2 Humble. The detection stage uses a trained YOLOv8 model (replaces the classical CV approach) combined with an MLP number classifier. The tracking stage runs a 9-state Extended Kalman Filter that handles robot spin, temporary occlusion, and armor plate switching.
 
-Two-stage pipeline:
+---
 
-**Detection** — binarizes the image, finds the glowing LED light strips on armor plates via contour analysis, pairs them up geometrically, then runs a perspective warp + MLP neural net to classify which robot (0-9). Solves 3D position using PnP with the camera calibration matrix.
+## Pipeline
 
-**Tracking** — runs an Extended Kalman Filter on the detector output. Tracks a 9-state vector (center position, velocity, yaw, angular velocity, armor radius). Handles temporary target loss by predicting position until the target reappears. State machine: `LOST -> DETECTING -> TRACKING -> TEMP_LOST`.
+```
+Camera → YOLOv8 Detector → MLP Classifier → PnP Solver → EKF Tracker → Target State
+```
 
-## stack
+**Detection** — YOLOv8n finds armor plates in each frame (small vs. large). Falls back to classical threshold + contour detection if no ONNX model is present. A perspective-warped ROI is passed to an MLP to classify which robot number (1–5, outpost, guard, base).
 
-- C++14 / ROS2 Humble
-- OpenCV (vision pipeline, PnP solving)
-- Eigen (EKF linear algebra)
-- ONNX (MLP inference via OpenCV DNN)
+**Pose estimation** — OpenCV's `solvePnP` uses known armor dimensions (135×55 mm small, 225×55 mm large) and the camera calibration matrix to get a 3D position and orientation for each detection.
 
-## packages
+**Tracking** — Extended Kalman Filter with a circular motion observation model. Tracks robot center position rather than armor position directly, so the filter stays locked even when the robot spins and a different armor plate comes into view.
+
+---
+
+## Packages
 
 | Package | Description |
 |---|---|
-| `armor_detector` | Image processing, light detection, number classification, PnP |
-| `armor_tracker` | EKF-based target tracking, state machine, TF2 transforms |
+| `armor_detector` | YOLOv8 inference, number classification, PnP pose solving |
+| `armor_tracker` | EKF tracker, state machine, TF2 coordinate transforms |
 | `auto_aim_interfaces` | Custom ROS2 message definitions |
 
-## build
+---
+
+## Build
 
 ```bash
-cd your_ros_ws
+cd your_ros_ws/src
+git clone https://github.com/scotthnguyen/robo-auto-aim.git
+
+cd ..
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install --packages-up-to sn_auto_aim
 ```
 
 Requires ROS2 Humble on Ubuntu 22.04.
 
-## how the EKF works
+---
 
-State vector: `[xc, vx, yc, vy, z, vz, yaw, vyaw, r]`
+## Training
 
-The filter models the robot center position with constant velocity. The observation function maps center + radius + yaw back to the observed armor position, which lets the filter stay locked on a robot even when it rotates and a different armor plate becomes visible.
+### YOLOv8 armor detector
 
-## topics
+```bash
+pip install ultralytics
+cd train_yolo
+# put images in data/images/train|val and labels in data/labels/train|val
+python train.py --epochs 100 --device 0
+```
 
-| Topic | Type | Description |
+Exports `armor.onnx` directly to `armor_detector/model/`. Rebuild and the node picks it up automatically.
+
+Dataset format: YOLO bounding box labels, 2 classes — `small_armor` (0), `large_armor` (1).
+
+### MLP number classifier
+
+```bash
+pip install torch opencv-python
+cd train_classifier
+# put images in data/<class>/ folders (1 2 3 4 5 outpost guard base negative)
+python train.py --epochs 50
+```
+
+Exports `mlp.onnx` and `label.txt` to `armor_detector/model/`.
+
+---
+
+## EKF State Model
+
+State vector: `[xc, vx, yc, vy, z, vz, yaw, v_yaw, r]`
+
+The observation function maps robot center + radius + yaw to the observed armor position:
+
+```
+xa = xc - r·cos(yaw)
+ya = yc - r·sin(yaw)
+```
+
+This lets the filter maintain a smooth estimate of robot center even as different armor plates rotate into view. Radius `r` is part of the state, so the filter self-corrects as it observes more of the robot's geometry.
+
+State machine: `LOST → DETECTING → TRACKING → TEMP_LOST`
+
+---
+
+## ROS2 Topics
+
+| Topic | Type | Direction |
 |---|---|---|
-| `/image_raw` | `sensor_msgs/Image` | Input camera feed |
-| `/camera_info` | `sensor_msgs/CameraInfo` | Camera calibration |
-| `/detector/armors` | `auto_aim_interfaces/Armors` | Detected armor plates with 3D poses |
-| `/tracker/target` | `auto_aim_interfaces/Target` | Tracked target with full state estimate |
+| `/image_raw` | `sensor_msgs/Image` | Input |
+| `/camera_info` | `sensor_msgs/CameraInfo` | Input |
+| `/detector/armors` | `auto_aim_interfaces/Armors` | Detector → Tracker |
+| `/tracker/target` | `auto_aim_interfaces/Target` | Output |
+
+---
+
+## Parameters
+
+Key tunable params (set via ROS2 launch or `ros2 param set`):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `yolo_confidence` | 0.5 | YOLO detection confidence threshold |
+| `yolo_nms_threshold` | 0.45 | NMS IoU threshold |
+| `classifier_threshold` | 0.7 | MLP confidence cutoff |
+| `tracker.max_match_distance` | 0.15 m | Max position diff for EKF data association |
+| `tracker.lost_time_thres` | 0.3 s | Time before TEMP_LOST → LOST transition |
+| `ekf.sigma2_q_xyz` | 20.0 | Process noise — position |
+| `ekf.sigma2_q_yaw` | 100.0 | Process noise — yaw |
