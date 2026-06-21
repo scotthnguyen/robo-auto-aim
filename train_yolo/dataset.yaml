@@ -1,0 +1,23 @@
+# Scott Nguyen — armor plate detection dataset
+#
+# Directory layout:
+#   data/
+#     images/
+#       train/   ← training images (.jpg / .png)
+#       val/     ← validation images
+#     labels/
+#       train/   ← YOLO format .txt files (one per image)
+#       val/
+#
+# Label format (YOLO): <class_id> <cx> <cy> <w> <h>  (all normalized 0-1)
+# class 0 = small_armor   (2-plate robots: number 1, 2, outpost)
+# class 1 = large_armor   (4-plate robots: number 3, 4, 5, guard, base)
+
+path: ./data
+train: images/train
+val: images/val
+
+nc: 2
+names:
+  0: small_armor
+  1: large_armor
