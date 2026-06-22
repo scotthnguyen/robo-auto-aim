@@ -16,7 +16,7 @@ jobs:
       - name: Build rm_auto_aim
         uses: ros-tooling/action-ros-ci@v0.3
         with:
-          package-name: rm_auto_aim
+          package-name: sn_auto_aim
           target-ros2-distro: humble
           skip-tests: true
       - name: Test armor_detector
