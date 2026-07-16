@@ -46,6 +46,7 @@ if(BUILD_TESTING)
     ament_cmake_copyright
     ament_cmake_uncrustify
     ament_cmake_cpplint
+    ament_cmake_clang_format
   )
   ament_lint_auto_find_test_dependencies()
 

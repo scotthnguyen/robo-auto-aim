@@ -42,13 +42,13 @@ if(BUILD_TESTING)
     ament_cmake_copyright
     ament_cmake_uncrustify
     ament_cmake_cpplint
+    ament_cmake_clang_format
   )
   ament_lint_auto_find_test_dependencies()
 
-  # find_package(ament_cmake_gtest)
-  # set(TEST_NAME test_kalman_filter)
-  # ament_add_gtest(${TEST_NAME} test/${TEST_NAME}.cpp)
-  # target_link_libraries(${TEST_NAME} ${PROJECT_NAME})
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_kalman_filter test/test_kalman_filter.cpp)
+  target_link_libraries(test_kalman_filter ${PROJECT_NAME})
 endif()
 
 #############
