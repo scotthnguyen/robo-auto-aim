@@ -1,0 +1,22 @@
+armor_tracker:
+  ros__parameters:
+    # Maximum armor distance to consider (XOY plane, meters)
+    max_armor_distance: 10.0
+
+    # Target frame for TF2 transforms
+    target_frame: odom
+
+    # Tracker state machine
+    tracker.max_match_distance: 0.15   # meters
+    tracker.max_match_yaw_diff: 1.0    # radians
+    tracker.tracking_thres: 5          # consecutive frames to enter TRACKING
+    tracker.lost_time_thres: 0.3       # seconds before TEMP_LOST -> LOST
+
+    # EKF process noise
+    ekf.sigma2_q_xyz: 20.0
+    ekf.sigma2_q_yaw: 100.0
+    ekf.sigma2_q_r: 800.0
+
+    # EKF measurement noise
+    ekf.r_xyz_factor: 0.05
+    ekf.r_yaw: 0.02

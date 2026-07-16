@@ -13,6 +13,7 @@
   <depend>auto_aim_interfaces</depend>
   <depend>armor_detector</depend>
   <depend>armor_tracker</depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

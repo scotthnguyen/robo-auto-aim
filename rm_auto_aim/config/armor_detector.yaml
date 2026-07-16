@@ -1,0 +1,28 @@
+armor_detector:
+  ros__parameters:
+    # Detection
+    binary_thres: 160
+    detect_color: 0  # 0=RED, 1=BLUE
+
+    # Light strip filters
+    light.min_ratio: 0.1
+    light.max_ratio: 0.4
+    light.max_angle: 40.0
+
+    # Armor pair filters
+    armor.min_light_ratio: 0.7
+    armor.min_small_center_distance: 0.8
+    armor.max_small_center_distance: 3.2
+    armor.min_large_center_distance: 3.2
+    armor.max_large_center_distance: 5.5
+    armor.max_angle: 35.0
+
+    # MLP classifier
+    classifier_threshold: 0.7
+    ignore_classes: ["negative"]
+
+    # YOLO (used if armor.onnx is present in model/)
+    yolo_confidence: 0.5
+    yolo_nms_threshold: 0.45
+
+    debug: false
