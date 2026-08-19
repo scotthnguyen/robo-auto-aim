@@ -50,12 +50,29 @@ if(BUILD_TESTING)
   )
   ament_lint_auto_find_test_dependencies()
 
-  find_package(ament_cmake_gtest)
+  find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_node_startup test/test_node_startup.cpp)
   target_link_libraries(test_node_startup ${PROJECT_NAME})
 
   ament_add_gtest(test_number_cls test/test_number_cls.cpp)
   target_link_libraries(test_number_cls ${PROJECT_NAME})
+
+  ament_add_gtest(test_detector test/test_detector.cpp)
+  target_link_libraries(test_detector ${PROJECT_NAME})
+
+  ament_add_gtest(test_pnp_solver test/test_pnp_solver.cpp)
+  target_link_libraries(test_pnp_solver ${PROJECT_NAME})
+
+  # These two read the sample captures in docs/, which are not installed.
+  ament_add_gtest(test_detector_images test/test_detector_images.cpp)
+  target_compile_definitions(test_detector_images PRIVATE
+    TEST_IMAGE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/docs")
+  target_link_libraries(test_detector_images ${PROJECT_NAME})
+
+  ament_add_gtest(test_yolo_detector test/test_yolo_detector.cpp)
+  target_compile_definitions(test_yolo_detector PRIVATE
+    TEST_IMAGE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/docs")
+  target_link_libraries(test_yolo_detector ${PROJECT_NAME})
 
 endif()
 
