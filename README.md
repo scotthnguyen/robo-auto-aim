@@ -2,7 +2,7 @@
 
 Real-time auto-aiming system for RoboMaster competitive robotics. Takes a raw camera feed and outputs a tracked 3D target position with velocity prediction — fast enough to feed a ballistic solver and actually hit moving targets.
 
-Built in C++14 on ROS2 Humble. The detection stage uses a trained YOLOv8 model (replaces the classical CV approach) combined with an MLP number classifier. The tracking stage runs a 9-state Extended Kalman Filter that handles robot spin, temporary occlusion, and armor plate switching.
+Built in C++14 on ROS2 Humble. Detection runs classical threshold + contour light-strip matching by default, and switches to a trained YOLOv8 model when one is present (see [Training](#training) — no model ships with the repo). Either way an MLP classifies the plate number. The tracking stage runs a 9-state Extended Kalman Filter that handles robot spin, temporary occlusion, and armor plate switching.
 
 ---
 
@@ -12,7 +12,9 @@ Built in C++14 on ROS2 Humble. The detection stage uses a trained YOLOv8 model (
 Camera → YOLOv8 Detector → MLP Classifier → PnP Solver → EKF Tracker → Target State
 ```
 
-**Detection** — YOLOv8n finds armor plates in each frame (small vs. large). Falls back to classical threshold + contour detection if no ONNX model is present. A perspective-warped ROI is passed to an MLP to classify which robot number (1–5, outpost, guard, base).
+**Detection** — YOLOv8n finds armor plates in each frame (small vs. large), or classical threshold + contour detection does if no ONNX model is present. A perspective-warped ROI is passed to an MLP to classify which robot number (1–5, outpost, guard, base).
+
+Both paths gate on team color via `detect_color`. The classical path reads it from the light-strip contours; because the YOLO model classifies plate *size* only, that path samples the strip bands at each box edge instead. A plate too dim to call is reported as unknown and dropped — the detector will not engage a plate it cannot attribute to the enemy.
 
 **Pose estimation** — OpenCV's `solvePnP` uses known armor dimensions (135×55 mm small, 225×55 mm large) and the camera calibration matrix to get a 3D position and orientation for each detection.
 
@@ -42,6 +44,44 @@ colcon build --symlink-install --packages-up-to sn_auto_aim
 ```
 
 Requires ROS2 Humble on Ubuntu 22.04.
+
+---
+
+## Run
+
+Both nodes are `rclcpp` components; the launch file composes them into a single
+container so armor messages pass between them via intra-process comms.
+
+```bash
+source install/setup.bash
+ros2 launch sn_auto_aim sn_auto_aim.launch.py
+```
+
+The tracker transforms armor poses into `target_frame` (default `odom`), so a
+TF from your camera's optical frame to that frame has to be published. Point a
+camera driver at `/image_raw` and `/camera_info` and the pipeline starts on the
+first frame.
+
+---
+
+## Tests
+
+```bash
+colcon test --packages-select armor_detector armor_tracker \
+  --event-handlers console_cohesion+ --return-code-on-test-failure
+colcon test-result --all --verbose
+```
+
+| Suite | Covers |
+|---|---|
+| `test_detector` | Light-strip segmentation, armor pairing, small/large classification, color gating |
+| `test_detector_images` | The above against the real captures in `docs/`, across the usable `binary_thres` range |
+| `test_yolo_detector` | Team-color sampling from strip bands, and the enemy-only filter applied to YOLO detections |
+| `test_pnp_solver` | Pose recovery against known armor geometry, reprojection round-trip, distortion-vector lengths |
+| `test_number_cls` | MLP classifier forward-pass benchmark |
+| `test_node_startup` | Detector node constructs and tears down |
+| `test_kalman_filter` | EKF predict/update on a constant-velocity model |
+| `test_tracker` | Tracker state machine, data association, armor-jump handling, radius clamping |
 
 ---
 
