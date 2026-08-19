@@ -41,9 +41,10 @@ private:
   // Maximum allowable armor distance in the XOY plane
   double max_armor_distance_;
 
-  // The time when the last message was received
-  rclcpp::Time last_time_;
-  double dt_;
+  // The time when the last message was received. Pinned to the ROS clock so it
+  // is never subtracted from a message stamp with a mismatched time source.
+  rclcpp::Time last_time_{0, 0, RCL_ROS_TIME};
+  double dt_{0.0};
 
   // Armor tracker
   double s2qxyz_, s2qyaw_, s2qr_;

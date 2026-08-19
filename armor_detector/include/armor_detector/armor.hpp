@@ -36,11 +36,11 @@ struct Light : public cv::RotatedRect
     tilt_angle = tilt_angle / CV_PI * 180;
   }
 
-  int color;
+  int color{-1};
   cv::Point2f top, bottom;
-  double length;
-  double width;
-  float tilt_angle;
+  double length{0.0};
+  double width{0.0};
+  float tilt_angle{0.0f};
 };
 
 struct Armor
@@ -59,12 +59,12 @@ struct Armor
   // Light pairs part
   Light left_light, right_light;
   cv::Point2f center;
-  ArmorType type;
+  ArmorType type{ArmorType::INVALID};
 
   // Number part
   cv::Mat number_img;
   std::string number;
-  float confidence;
+  float confidence{0.0f};
   std::string classfication_result;
 };
 

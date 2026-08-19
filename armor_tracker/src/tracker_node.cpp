@@ -82,7 +82,7 @@ ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions & options)
     Eigen::MatrixXd q(9, 9);
     double t = dt_, x = s2qxyz_, y = s2qyaw_, r = s2qr_;
     double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
-    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x, q_vy_vy = pow(t, 2) * y;
+    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y, q_vy_vy = pow(t, 2) * y;
     double q_r = pow(t, 4) / 4 * r;
     // clang-format off
     //    xc      v_xc    yc      v_yc    za      v_za    yaw     v_yaw   r
@@ -190,7 +190,7 @@ void ArmorTrackerNode::armorsCallback(const auto_aim_interfaces::msg::Armors::Sh
     ps.pose = armor.pose;
     try {
       armor.pose = tf2_buffer_->transform(ps, target_frame_).pose;
-    } catch (const tf2::ExtrapolationException & ex) {
+    } catch (const tf2::TransformException & ex) {
       RCLCPP_ERROR(get_logger(), "Error while transforming %s", ex.what());
       return;
     }
@@ -220,6 +220,14 @@ void ArmorTrackerNode::armorsCallback(const auto_aim_interfaces::msg::Armors::Sh
     target_msg.tracking = false;
   } else {
     dt_ = (time - last_time_).seconds();
+    if (dt_ <= 0.0) {
+      // Duplicate or out-of-order stamp (e.g. a rosbag looping). No time has
+      // elapsed to propagate, and dividing by it below would be undefined —
+      // resync the clock and drop the frame.
+      RCLCPP_WARN(get_logger(), "Non-positive dt (%f s), skipping frame", dt_);
+      last_time_ = time;
+      return;
+    }
     tracker_->lost_thres = static_cast<int>(lost_time_thres_ / dt_);
     tracker_->update(armors_msg);
 

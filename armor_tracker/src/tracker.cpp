@@ -18,12 +18,22 @@
 namespace sn_auto_aim
 {
 Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
-: tracker_state(LOST),
+: tracking_thres(0),
+  lost_thres(0),
+  tracker_state(LOST),
   tracked_id(std::string("")),
+  tracked_armors_num(ArmorsNum::NORMAL_4),
+  info_position_diff(0.0),
+  info_yaw_diff(0.0),
   measurement(Eigen::VectorXd::Zero(4)),
   target_state(Eigen::VectorXd::Zero(9)),
+  dz(0.0),
+  another_r(0.0),
   max_match_distance_(max_match_distance),
-  max_match_yaw_diff_(max_match_yaw_diff)
+  max_match_yaw_diff_(max_match_yaw_diff),
+  detect_count_(0),
+  lost_count_(0),
+  last_yaw_(0.0)
 {
 }
 
@@ -48,6 +58,8 @@ void Tracker::init(const Armors::SharedPtr & armors_msg)
 
   tracked_id = tracked_armor.number;
   tracker_state = DETECTING;
+  detect_count_ = 0;
+  lost_count_ = 0;
 
   updateArmorsNum(tracked_armor);
 }

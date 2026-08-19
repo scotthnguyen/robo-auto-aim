@@ -234,8 +234,11 @@ std::vector<Armor> ArmorDetectorNode::detectArmors(
 
   // Publish debug info
   if (debug_) {
-    binary_img_pub_.publish(
-      cv_bridge::CvImage(img_msg->header, "mono8", detector_->binary_img).toImageMsg());
+    // The YOLO path never produces a binary image, so only publish a real one.
+    if (!detector_->binary_img.empty()) {
+      binary_img_pub_.publish(
+        cv_bridge::CvImage(img_msg->header, "mono8", detector_->binary_img).toImageMsg());
+    }
 
     // Sort lights and armors data by x coordinate
     std::sort(
