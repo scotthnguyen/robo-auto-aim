@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace sn_auto_aim
 {
@@ -25,8 +26,11 @@ std::vector<Armor> YoloDetector::detect(const cv::Mat & img)
   net_.setInput(blob);
   std::vector<cv::Mat> outputs;
   net_.forward(outputs, net_.getUnconnectedOutLayersNames());
+  if (outputs.empty()) {
+    return {};
+  }
 
-  return postprocess(outputs[0], scale, offset);
+  return postprocess(outputs[0], img, scale, offset);
 }
 
 void YoloDetector::preprocess(
@@ -53,7 +57,7 @@ void YoloDetector::preprocess(
 }
 
 std::vector<Armor> YoloDetector::postprocess(
-  const cv::Mat & output, float scale, const cv::Point & offset) const
+  const cv::Mat & output, const cv::Mat & img, float scale, const cv::Point & offset) const
 {
   // YOLOv8 ONNX output: [1, 4+NUM_CLASSES, 8400]
   // Reshape to [4+NUM_CLASSES, 8400] then transpose to [8400, 4+NUM_CLASSES]
@@ -98,12 +102,45 @@ std::vector<Armor> YoloDetector::postprocess(
   std::vector<Armor> armors;
   armors.reserve(indices.size());
   for (int idx : indices) {
-    armors.push_back(boxToArmor(boxes[idx], class_ids[idx]));
+    armors.push_back(
+      boxToArmor(boxes[idx], class_ids[idx], sampleLightColor(img, boxes[idx])));
   }
   return armors;
 }
 
-Armor YoloDetector::boxToArmor(const cv::Rect & box, int class_id)
+int YoloDetector::sampleLightColor(const cv::Mat & img, const cv::Rect & box)
+{
+  // The LED strips run down the left and right edges of the plate, so sample a
+  // narrow band over each and let the brighter channel decide. Only lit pixels
+  // get a vote, which keeps the dark plate face and whatever is behind the
+  // robot from outvoting the strips themselves.
+  const cv::Rect bounds(0, 0, img.cols, img.rows);
+  const int band_w = std::max(2, static_cast<int>(box.width * 0.15f));
+
+  int64_t sum_r = 0, sum_b = 0;
+  for (int edge = 0; edge < 2; edge++) {
+    const int x = edge == 0 ? box.x : box.x + box.width - band_w;
+    const cv::Rect band = cv::Rect(x, box.y, band_w, box.height) & bounds;
+    if (band.width <= 0 || band.height <= 0) continue;
+
+    const cv::Mat roi = img(band);
+    for (int i = 0; i < roi.rows; i++) {
+      for (int j = 0; j < roi.cols; j++) {
+        // rgb8 input: channel 0 is red, channel 2 is blue.
+        const cv::Vec3b & px = roi.at<cv::Vec3b>(i, j);
+        if (std::max(px[0], px[2]) < LIGHT_MIN_INTENSITY) continue;
+        sum_r += px[0];
+        sum_b += px[2];
+      }
+    }
+  }
+
+  // Nothing lit, or a dead heat — refuse to guess.
+  if (sum_r == sum_b) return -1;
+  return sum_r > sum_b ? RED : BLUE;
+}
+
+Armor YoloDetector::boxToArmor(const cv::Rect & box, int class_id, int color)
 {
   // Approximate the two vertical LED lights as the left and right edges of the bbox.
   // A thin RotatedRect on each edge gives the Light struct the top/bottom points
@@ -118,8 +155,8 @@ Armor YoloDetector::boxToArmor(const cv::Rect & box, int class_id)
 
   Light left_light(left_rect);
   Light right_light(right_rect);
-  left_light.color = -1;
-  right_light.color = -1;
+  left_light.color = color;
+  right_light.color = color;
 
   Armor armor(left_light, right_light);
   armor.type = (class_id == 0) ? ArmorType::SMALL : ArmorType::LARGE;

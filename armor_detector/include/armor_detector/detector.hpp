@@ -53,6 +53,12 @@ public:
   std::vector<Light> findLights(const cv::Mat & rbg_img, const cv::Mat & binary_img);
   std::vector<Armor> matchLights(const std::vector<Light> & lights);
 
+  // Drops every armor whose light strips are not `detect_color`. Armors whose
+  // colour could not be determined (-1) are dropped too — the YOLO model
+  // classifies plate size only, so this is the sole guard against locking onto
+  // a teammate.
+  static void filterByColor(std::vector<Armor> & armors, int detect_color);
+
   // For debug usage
   cv::Mat getAllNumbersImage();
   void drawResults(cv::Mat & img);

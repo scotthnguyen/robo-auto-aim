@@ -22,14 +22,19 @@ public:
 
   std::vector<Armor> detect(const cv::Mat & img);
 
+  // Decides whether the plate in `box` is lit red or blue by sampling the strip
+  // bands at its left and right edges. `img` must be rgb8. Returns RED, BLUE,
+  // or -1 when nothing in the box is lit brightly enough to call.
+  static int sampleLightColor(const cv::Mat & img, const cv::Rect & box);
+
 private:
   void preprocess(
     const cv::Mat & img, cv::Mat & blob, float & scale, cv::Point & offset) const;
 
   std::vector<Armor> postprocess(
-    const cv::Mat & output, float scale, const cv::Point & offset) const;
+    const cv::Mat & output, const cv::Mat & img, float scale, const cv::Point & offset) const;
 
-  static Armor boxToArmor(const cv::Rect & box, int class_id);
+  static Armor boxToArmor(const cv::Rect & box, int class_id, int color);
 
   cv::dnn::Net net_;
   float conf_threshold_;
@@ -40,6 +45,8 @@ private:
   static constexpr int INPUT_H = 640;
   // 0 = small_armor, 1 = large_armor
   static constexpr int NUM_CLASSES = 2;
+  // Minimum R or B value for a pixel to count as "lit" when sampling colour
+  static constexpr int LIGHT_MIN_INTENSITY = 120;
 };
 
 }  // namespace sn_auto_aim

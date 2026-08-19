@@ -29,6 +29,10 @@ std::vector<Armor> Detector::detect(const cv::Mat & input)
 {
   if (yolo_detector) {
     armors_ = yolo_detector->detect(input);
+    // The model classifies plate size, not team colour, so the colour is sampled
+    // from the light strips instead. The classical path gets this filtering for
+    // free inside matchLights().
+    filterByColor(armors_, detect_color);
     debug_lights.data.clear();
     debug_armors.data.clear();
   } else {
@@ -183,7 +187,9 @@ ArmorType Detector::isArmor(const Light & light_1, const Light & light_2)
 
   // Angle of light center connection
   cv::Point2f diff = light_1.center - light_2.center;
-  float angle = std::abs(std::atan(diff.y / diff.x)) / CV_PI * 180;
+  // atan2 against |dx| keeps this the acute angle off horizontal while staying
+  // finite when the two lights are vertically aligned (dx == 0).
+  float angle = std::abs(std::atan2(diff.y, std::abs(diff.x))) / CV_PI * 180;
   bool angle_ok = angle < a.max_angle;
 
   bool is_armor = light_ratio_ok && center_distance_ok && angle_ok;
@@ -206,6 +212,17 @@ ArmorType Detector::isArmor(const Light & light_1, const Light & light_2)
   this->debug_armors.data.emplace_back(armor_data);
 
   return type;
+}
+
+void Detector::filterByColor(std::vector<Armor> & armors, int detect_color)
+{
+  armors.erase(
+    std::remove_if(
+      armors.begin(), armors.end(),
+      [detect_color](const Armor & armor) {
+        return armor.left_light.color != detect_color;
+      }),
+    armors.end());
 }
 
 cv::Mat Detector::getAllNumbersImage()
